@@ -1,0 +1,6 @@
+start_date,end_date,icms_rate,pis_cofins_m3,freight_m3,margin_m3,notes
+2021-01-01,2022-06-23,0.1250,130.90,0.00,0.00,"MT approximation: ICMS effective 12.5%; PIS/Cofins pre-LC 194. Freight and margins unknown, set to zero."
+2022-06-24,2023-02-28,0.0850,0.00,0.00,0.00,"PIS/Cofins considered zero per LC 194 period; MT ICMS effective 8.5% after July 2022 note."
+2023-03-01,2024-12-31,0.0850,130.90,0.00,0.00,"PIS/Cofins normalized to R$130.90/m3 based on CEPEA notes; MT ICMS effective 8.5%."
+2025-01-01,2025-04-30,0.1054,130.90,0.00,0.00,"MT ICMS effective 10.54% from 2025; PIS/Cofins prior to May 2025."
+2025-05-01,2099-12-31,0.1054,192.20,0.00,0.00,"PIS/Cofins R$192.20/m3 from May 2025; MT ICMS effective 10.54%."

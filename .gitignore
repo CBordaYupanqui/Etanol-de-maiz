@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Raw download cache. Rebuild with src/ethanol_mt_model.py.
+data/cache/
+
+# Local/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Keep generated outputs/dashboard tracked intentionally for sharing.
+!outputs/
+!dashboard/
