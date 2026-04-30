@@ -130,7 +130,7 @@ HTML = r"""<!doctype html>
     .kpi-value { font-size: 25px; font-weight: 750; margin-top: 4px; }
     .chart-title { font-weight: 750; font-size: 15px; margin-bottom: 8px; }
     svg { width: 100%; height: 360px; display: block; touch-action: none; }
-    svg.large-chart { height: 500px; }
+    svg.large-chart { height: 540px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; }
     th { color: var(--muted); font-weight: 700; }
@@ -154,7 +154,7 @@ HTML = r"""<!doctype html>
       z-index: 5;
       box-shadow: 0 8px 24px rgba(0,0,0,0.18);
     }
-    .manual-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .manual-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .manual-grid small { color: var(--muted); display: block; margin-top: 4px; }
     .history-quad {
       display: grid;
@@ -164,12 +164,12 @@ HTML = r"""<!doctype html>
     .quad-item {
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 10px;
+      padding: 12px;
       min-width: 0;
       background: #fbfcf9;
     }
-    .quad-item .chart-title { font-size: 14px; }
-    svg.quad-chart { height: 330px; }
+    .quad-item .chart-title { font-size: 14px; min-height: 18px; display: flex; align-items: center; }
+    svg.quad-chart { height: 390px; }
     .badge {
       display: inline-block;
       border-radius: 999px;
@@ -181,9 +181,9 @@ HTML = r"""<!doctype html>
     }
     @media (max-width: 980px) {
       .span-3, .span-4, .span-5, .span-7, .span-8, .span-9 { grid-column: span 12; }
-      svg.large-chart { height: 420px; }
+      svg.large-chart { height: 440px; }
       .history-quad { grid-template-columns: 1fr; }
-      svg.quad-chart { height: 360px; }
+      svg.quad-chart { height: 380px; }
       header, main { padding-left: 15px; padding-right: 15px; }
     }
   </style>
@@ -235,9 +235,8 @@ HTML = r"""<!doctype html>
         <div class="manual-grid">
           <div><label for="brentInput">Brent USD/bbl</label><input id="brentInput" type="number" step="0.10"><small id="brentBaseLabel"></small></div>
           <div><label for="usdInput">USD/BRL</label><input id="usdInput" type="number" step="0.0001"><small id="usdBaseLabel"></small></div>
-          <div><label for="gasInput">Gasolina neta MT R$/l</label><input id="gasInput" type="number" step="0.001"><small id="gasBaseLabel"></small></div>
         </div>
-        <div class="hint">Estos inputs ajustan el escenario what-if contra la base. Hoy usan sensibilidad interpolada entre escenarios; el siguiente paso puede ser recalcular el modelo completo con esos valores.</div>
+        <div class="hint" id="gasEstimateLabel">La gasolina neta MT se estima internamente desde Brent y USD/BRL.</div>
       </div>
       <div class="panel span-4">
         <div class="kpi-label">Impacto 12 meses vs base</div>
@@ -376,24 +375,38 @@ HTML = r"""<!doctype html>
     function baselineInputs() {
       return {
         brent: latestValue("brent_usd_bbl") || 1,
-        usd: latestValue("usd_brl") || 1,
-        gas: latestValue("anp_gasoline_mt_net_l") || 1
+        usd: latestValue("usd_brl") || 1
       };
     }
     function shockScore() {
       const base = baselineInputs();
       const b = ((Number($("brentInput").value) / base.brent) - 1) / 0.15;
       const u = ((Number($("usdInput").value) / base.usd) - 1) / 0.08;
-      const g = ((Number($("gasInput").value) / base.gas) - 1) / 0.05;
-      return Math.max(-2, Math.min(2, (b + u + g) / 3));
+      return Math.max(-2, Math.min(2, (b + u) / 2));
+    }
+    function forecastFullRows(t, scenario) {
+      return DATA.forecasts.filter(r => r.target === t && r.scenario === scenario);
     }
     function forecastRows(t, scenario) {
-      return DATA.forecasts.filter(r => r.target === t && r.scenario === scenario).map(r => ({ date:r.date, value:Number(r.forecast) }));
+      return forecastFullRows(t, scenario).map(r => ({ date:r.date, value:Number(r.forecast) }));
     }
     function whatIfRows(t) {
       const base = forecastRows(t, "base");
       const up = forecastRows(t, "upside_macro");
       const down = forecastRows(t, "downside_macro");
+      const upByDate = Object.fromEntries(up.map(r => [r.date, r.value]));
+      const downByDate = Object.fromEntries(down.map(r => [r.date, r.value]));
+      const score = shockScore();
+      return base.map(r => {
+        const ref = score >= 0 ? upByDate[r.date] : downByDate[r.date];
+        const delta = (ref ?? r.value) - r.value;
+        return { date:r.date, value: Math.max(0, r.value + Math.abs(score) * delta) };
+      });
+    }
+    function whatIfGasRows(t) {
+      const base = forecastFullRows(t, "base").map(r => ({ date:r.date, value:Number(r.gasoline_estimated_net_l) }));
+      const up = forecastFullRows(t, "upside_macro").map(r => ({ date:r.date, value:Number(r.gasoline_estimated_net_l) }));
+      const down = forecastFullRows(t, "downside_macro").map(r => ({ date:r.date, value:Number(r.gasoline_estimated_net_l) }));
       const upByDate = Object.fromEntries(up.map(r => [r.date, r.value]));
       const downByDate = Object.fromEntries(down.map(r => [r.date, r.value]));
       const score = shockScore();
@@ -606,6 +619,11 @@ HTML = r"""<!doctype html>
         const delta = lastWi.value - lastBase.value;
         $("impactKpi").textContent = `${delta >= 0 ? "+" : ""}${num(delta, meta[t].digits)}`;
       }
+      const gasWi = whatIfGasRows(t);
+      const lastGas = gasWi[gasWi.length-1];
+      $("gasEstimateLabel").innerHTML = lastGas
+        ? `Gasolina neta MT estimada por el modelo al final del escenario: <b>${num(lastGas.value, 3)} R$/litro</b>. No es un input manual.`
+        : "La gasolina neta MT se estima internamente desde Brent y USD/BRL.";
       renderMonthlyTable();
     }
     function renderBacktest() {
@@ -691,10 +709,8 @@ HTML = r"""<!doctype html>
       const base = baselineInputs();
       $("brentInput").value = base.brent.toFixed(2);
       $("usdInput").value = base.usd.toFixed(4);
-      $("gasInput").value = base.gas.toFixed(3);
       $("brentBaseLabel").textContent = `base actual: ${num(base.brent, 2)}`;
       $("usdBaseLabel").textContent = `base actual: ${num(base.usd, 4)}`;
-      $("gasBaseLabel").textContent = `base actual: ${num(base.gas, 3)}`;
     }
     document.querySelectorAll(".page-tab").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -703,7 +719,7 @@ HTML = r"""<!doctype html>
         renderAll();
       });
     });
-    ["targetSelect","rangeSelect","horizonSelect","historyRangeSelect","brentInput","usdInput","gasInput"].forEach(id => $(id).addEventListener("input", renderAll));
+    ["targetSelect","rangeSelect","horizonSelect","historyRangeSelect","brentInput","usdInput"].forEach(id => $(id).addEventListener("input", renderAll));
     initInputs();
     renderAll();
   </script>

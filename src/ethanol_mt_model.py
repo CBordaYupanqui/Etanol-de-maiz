@@ -33,6 +33,7 @@ GROSS_PRICE_COLUMNS = ["cepea_ethanol_mt_m3", "anp_ethanol_mt_l", "anp_gasoline_
 TARGETS = ["cepea_ethanol_mt_net_m3", "anp_ethanol_mt_net_l"]
 EXOG_COLUMNS = ["anp_gasoline_mt_net_l", "brent_usd_bbl", "usd_brl"]
 PARITY_COLUMNS = ["anp_parity_gross", "anp_parity_net"]
+GASOLINE_EST_COL = "anp_gasoline_mt_net_l_est"
 LAGS = [1, 2, 4, 8, 52]
 HORIZONS = [4, 12, 26, 52]
 DEFAULT_NET_ADJUSTMENTS = Path(__file__).resolve().parents[1] / "config" / "net_price_adjustments.csv"
@@ -484,6 +485,61 @@ def add_features(data: pd.DataFrame, target: str, horizon: int = 0) -> tuple[pd.
     return df, features, y_col
 
 
+def add_gasoline_model_features(data: pd.DataFrame) -> tuple[pd.DataFrame, list[str], str]:
+    df = data.sort_values("date").copy()
+    for col in ["anp_gasoline_mt_net_l", "brent_usd_bbl", "usd_brl"]:
+        if col not in df:
+            df[col] = np.nan
+    df[["anp_gasoline_mt_net_l", "brent_usd_bbl", "usd_brl"]] = df[
+        ["anp_gasoline_mt_net_l", "brent_usd_bbl", "usd_brl"]
+    ].ffill()
+    df["brent_brl_lag_1"] = (df["brent_usd_bbl"] * df["usd_brl"]).shift(1)
+    df["brent_usd_bbl_lag_1"] = df["brent_usd_bbl"].shift(1)
+    df["usd_brl_lag_1"] = df["usd_brl"].shift(1)
+    df["brent_usd_bbl_chg_4"] = df["brent_usd_bbl"].pct_change(4).shift(1)
+    df["usd_brl_chg_4"] = df["usd_brl"].pct_change(4).shift(1)
+    for lag in [1, 4, 12]:
+        df[f"anp_gasoline_mt_net_l_lag_{lag}"] = df["anp_gasoline_mt_net_l"].shift(lag)
+    df["anp_gasoline_mt_net_l_ma_4"] = df["anp_gasoline_mt_net_l"].shift(1).rolling(4).mean()
+    iso = df["date"].dt.isocalendar()
+    week = iso.week.astype(float)
+    df["week_sin"] = np.sin(2 * np.pi * week / 52.0)
+    df["week_cos"] = np.cos(2 * np.pi * week / 52.0)
+    month = df["date"].dt.month.astype(float)
+    df["month_sin"] = np.sin(2 * np.pi * month / 12.0)
+    df["month_cos"] = np.cos(2 * np.pi * month / 12.0)
+    features = [
+        "brent_brl_lag_1",
+        "brent_usd_bbl_lag_1",
+        "usd_brl_lag_1",
+        "brent_usd_bbl_chg_4",
+        "usd_brl_chg_4",
+        "anp_gasoline_mt_net_l_lag_1",
+        "anp_gasoline_mt_net_l_lag_4",
+        "anp_gasoline_mt_net_l_lag_12",
+        "anp_gasoline_mt_net_l_ma_4",
+        "week_sin",
+        "week_cos",
+        "month_sin",
+        "month_cos",
+    ]
+    return df, features, "anp_gasoline_mt_net_l"
+
+
+def add_gasoline_estimates(data: pd.DataFrame) -> pd.DataFrame:
+    df = data.sort_values("date").copy()
+    featured, features, y_col = add_gasoline_model_features(df)
+    estimates = pd.Series(np.nan, index=featured.index, dtype=float)
+    try:
+        model = fit_ridge(featured, features, y_col, alpha=5.0)
+        valid = featured.dropna(subset=features).index
+        estimates.loc[valid] = np.maximum(model.predict(featured.loc[valid]), 0.0)
+    except ValueError:
+        pass
+    df[GASOLINE_EST_COL] = estimates.values
+    return df
+
+
 @dataclass
 class RidgeModel:
     columns: list[str]
@@ -721,22 +777,44 @@ def forecast_recursive(
     featured, features, y_col = add_features(history, target, horizon=0)
     features = feature_groups(target)["D_plus_usd_brl"]
     model = fit_ridge(featured, features, y_col)
+    gas_featured, gas_features, gas_y_col = add_gasoline_model_features(history)
+    gas_model = fit_ridge(gas_featured, gas_features, gas_y_col, alpha=5.0)
 
     last_date = history["date"].max()
     scenario_exog = {
         "brent_usd_bbl": history["brent_usd_bbl"].ffill().iloc[-1] * (1 + shock_brent),
         "usd_brl": history["usd_brl"].ffill().iloc[-1] * (1 + shock_usd),
-        "anp_gasoline_mt_net_l": history["anp_gasoline_mt_net_l"].ffill().iloc[-1] * (1 + shock_gasoline),
     }
     outputs = []
     work = history.copy()
+    work["brent_usd_bbl"] = work["brent_usd_bbl"].ffill()
+    work["usd_brl"] = work["usd_brl"].ffill()
+    work["anp_gasoline_mt_net_l"] = work["anp_gasoline_mt_net_l"].ffill()
     for step in range(1, weeks + 1):
         next_date = last_date + pd.Timedelta(days=7 * step)
+        gas_seed = {
+            "date": next_date,
+            "brent_usd_bbl": scenario_exog["brent_usd_bbl"],
+            "usd_brl": scenario_exog["usd_brl"],
+            "anp_gasoline_mt_net_l": work["anp_gasoline_mt_net_l"].iloc[-1],
+        }
+        gas_work = pd.concat([work, pd.DataFrame([gas_seed])], ignore_index=True)
+        gas_row, _, _ = add_gasoline_model_features(gas_work)
+        gas_row = gas_row.iloc[[-1]].copy()
+        brent_ref_4 = work["brent_usd_bbl"].iloc[-4] if len(work) >= 4 else work["brent_usd_bbl"].iloc[-1]
+        usd_ref_4 = work["usd_brl"].iloc[-4] if len(work) >= 4 else work["usd_brl"].iloc[-1]
+        gas_row["brent_usd_bbl_lag_1"] = scenario_exog["brent_usd_bbl"]
+        gas_row["usd_brl_lag_1"] = scenario_exog["usd_brl"]
+        gas_row["brent_brl_lag_1"] = scenario_exog["brent_usd_bbl"] * scenario_exog["usd_brl"]
+        gas_row["brent_usd_bbl_chg_4"] = scenario_exog["brent_usd_bbl"] / brent_ref_4 - 1 if brent_ref_4 else 0.0
+        gas_row["usd_brl_chg_4"] = scenario_exog["usd_brl"] / usd_ref_4 - 1 if usd_ref_4 else 0.0
+        gasoline_est = max(float(gas_model.predict(gas_row)[0]), 0.0)
+
         row, _ = _next_row(work, target, next_date)
         row = row.copy()
         row["brent_usd_bbl_lag_1"] = scenario_exog["brent_usd_bbl"]
         row["usd_brl_lag_1"] = scenario_exog["usd_brl"]
-        row["anp_gasoline_mt_net_l_lag_1"] = scenario_exog["anp_gasoline_mt_net_l"]
+        row["anp_gasoline_mt_net_l_lag_1"] = gasoline_est
         pred = max(float(model.predict(row)[0]), 0.0)
 
         new_record = {col: work[col].iloc[-1] if col in work else np.nan for col in TARGETS + EXOG_COLUMNS}
@@ -744,9 +822,19 @@ def forecast_recursive(
         new_record[target] = pred
         new_record["brent_usd_bbl"] = scenario_exog["brent_usd_bbl"]
         new_record["usd_brl"] = scenario_exog["usd_brl"]
-        new_record["anp_gasoline_mt_net_l"] = scenario_exog["anp_gasoline_mt_net_l"]
+        new_record["anp_gasoline_mt_net_l"] = gasoline_est
         work = pd.concat([work, pd.DataFrame([new_record])], ignore_index=True)
-        outputs.append({"date": next_date, "target": target, "scenario": scenario, "forecast": pred})
+        outputs.append(
+            {
+                "date": next_date,
+                "target": target,
+                "scenario": scenario,
+                "forecast": pred,
+                "brent_usd_bbl": scenario_exog["brent_usd_bbl"],
+                "usd_brl": scenario_exog["usd_brl"],
+                "gasoline_estimated_net_l": gasoline_est,
+            }
+        )
     return pd.DataFrame(outputs)
 
 
@@ -795,6 +883,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
         local_cepea_csv=Path(args.cepea_csv) if args.cepea_csv else None,
         net_adjustments_csv=Path(args.net_adjustments) if args.net_adjustments else None,
     )
+    dataset = add_gasoline_estimates(dataset)
     dataset.to_csv(output_dir / "integrated_dataset.csv", index=False)
     dataset[["date", "cepea_ethanol_mt_m3", "cepea_ethanol_mt_net_m3"]].dropna(
         subset=["cepea_ethanol_mt_net_m3"]
@@ -808,6 +897,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             "anp_ethanol_mt_net_l",
             "anp_gasoline_mt_l",
             "anp_gasoline_mt_net_l",
+            GASOLINE_EST_COL,
             *PARITY_COLUMNS,
             "brent_usd_bbl",
             "usd_brl",
