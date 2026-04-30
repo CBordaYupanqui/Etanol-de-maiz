@@ -46,7 +46,21 @@
     .span-5 { grid-column: span 5; }
     .span-7 { grid-column: span 7; }
     .span-8 { grid-column: span 8; }
+    .span-9 { grid-column: span 9; }
     .span-12 { grid-column: span 12; }
+    .nav-tabs { display: flex; gap: 8px; margin-top: 14px; }
+    .page-tab {
+      border: 1px solid var(--line);
+      background: #f7f9f4;
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .page-tab.active { background: var(--base); border-color: var(--base); color: #fff; }
+    .page { display: none; }
+    .page.active { display: block; }
     label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
     select, input[type="range"], input[type="number"] { width: 100%; }
     select, input[type="number"] {
@@ -60,6 +74,7 @@
     .kpi-value { font-size: 25px; font-weight: 750; margin-top: 4px; }
     .chart-title { font-weight: 750; font-size: 15px; margin-bottom: 8px; }
     svg { width: 100%; height: 360px; display: block; touch-action: none; }
+    svg.large-chart { height: 500px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; }
     th { color: var(--muted); font-weight: 700; }
@@ -95,7 +110,8 @@
       font-size: 12px;
     }
     @media (max-width: 980px) {
-      .span-3, .span-4, .span-5, .span-7, .span-8 { grid-column: span 12; }
+      .span-3, .span-4, .span-5, .span-7, .span-8, .span-9 { grid-column: span 12; }
+      svg.large-chart { height: 420px; }
       header, main { padding-left: 15px; padding-right: 15px; }
     }
   </style>
@@ -104,9 +120,14 @@
   <header>
     <h1>Etanol hidratado MT - dashboard interactivo</h1>
     <div class="sub">Precios netos estimados, Brent como variable estrategica, backtesting real vs modelo y resultados mensuales.</div>
+    <nav class="nav-tabs" aria-label="Secciones del dashboard">
+      <button class="page-tab active" type="button" data-page="modelPage">Modelo</button>
+      <button class="page-tab" type="button" data-page="historyPage">Historicos</button>
+    </nav>
   </header>
   <main>
-    <section class="grid">
+    <section id="modelPage" class="page active">
+    <div class="grid">
       <div class="panel span-3">
         <label for="targetSelect">Indicador</label>
         <select id="targetSelect">
@@ -151,9 +172,9 @@
         <div class="kpi-value" id="impactKpi">n/a</div>
         <div class="sub">ultimo mes proyectado, escenario what-if</div>
       </div>
-    </section>
+    </div>
 
-    <section class="grid" style="margin-top:14px">
+    <div class="grid" style="margin-top:14px">
       <div class="panel span-8">
         <div class="chart-title">Historico y proyeccion neta</div>
         <svg id="mainChart"></svg>
@@ -176,24 +197,6 @@
         <div class="chart-title">Correlaciones historicas por rezago</div>
         <svg id="corrChart"></svg>
       </div>
-      <div class="panel span-4">
-        <div class="chart-title">Brent historico</div>
-        <svg id="brentChart"></svg>
-      </div>
-      <div class="panel span-4">
-        <div class="chart-title">USD/BRL historico</div>
-        <svg id="usdChart"></svg>
-      </div>
-      <div class="panel span-4">
-        <div class="chart-title">Gasolina neta MT historica</div>
-        <svg id="gasChart"></svg>
-        <div class="hint">Estos graficos estan vinculados por fecha al pasar el mouse.</div>
-      </div>
-      <div class="panel span-4">
-        <div class="chart-title">Paridad ANP etanol/gasolina C</div>
-        <svg id="parityChart"></svg>
-        <div class="hint">Marcador de surtidor: etanol hidratado ANP dividido gasolina C ANP. La linea punteada marca 0,70.</div>
-      </div>
       <div class="panel span-5">
         <div class="chart-title">Validacion mensual del modelo completo</div>
         <div id="metricsTable"></div>
@@ -211,6 +214,50 @@
             <tr><th>Dashboard</th><td class="path" id="dashboardPath"></td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+    </section>
+
+    <section id="historyPage" class="page">
+      <div class="grid">
+        <div class="panel span-3">
+          <label for="historyRangeSelect">Historia visible</label>
+          <select id="historyRangeSelect">
+            <option value="5y">5 anos</option>
+            <option value="3y">3 anos</option>
+            <option value="2y">2 anos</option>
+            <option value="1y">1 ano</option>
+          </select>
+        </div>
+        <div class="panel span-9">
+          <div class="kpi-label">Hoja de historicos</div>
+          <div class="sub">Series en valores reales, no base 100. Los graficos comparten el cursor temporal para comparar una misma fecha entre variables.</div>
+        </div>
+        <div class="panel span-12">
+          <div class="chart-title">Etanol hidratado MT historico</div>
+          <svg id="histEthanolChart" class="large-chart"></svg>
+          <div class="legend">
+            <span><i class="swatch" style="background:#1f2a2e"></i>CEPEA neto R$/litro equivalente</span>
+            <span><i class="swatch" style="background:var(--base)"></i>ANP etanol neto R$/litro</span>
+          </div>
+        </div>
+        <div class="panel span-12">
+          <div class="chart-title">Gasolina C ANP neta MT</div>
+          <svg id="histGasChart" class="large-chart"></svg>
+        </div>
+        <div class="panel span-12">
+          <div class="chart-title">Brent historico</div>
+          <svg id="histBrentChart" class="large-chart"></svg>
+        </div>
+        <div class="panel span-12">
+          <div class="chart-title">USD/BRL historico</div>
+          <svg id="histUsdChart" class="large-chart"></svg>
+        </div>
+        <div class="panel span-12">
+          <div class="chart-title">Paridad ANP etanol/gasolina C</div>
+          <svg id="histParityChart" class="large-chart"></svg>
+          <div class="hint">Marcador de surtidor: etanol hidratado ANP dividido gasolina C ANP. La linea punteada marca 0,70.</div>
+        </div>
       </div>
     </section>
   </main>
@@ -242,6 +289,7 @@
     function target() { return $("targetSelect").value; }
     function horizon() { return Number($("horizonSelect").value); }
     function range() { return $("rangeSelect").value; }
+    function historyRange() { return $("historyRangeSelect").value; }
     function latestValue(column) {
       const rows = DATA.dataset.filter(r => r[column] !== null);
       return rows.length ? Number(rows[rows.length - 1][column]) : null;
@@ -283,7 +331,7 @@
         .map(r => ({ date:r.date, value:Number(r[t]) }));
     }
     function lineChart(svg, series, yLabel, xLabel) {
-      const width = 920, height = 360, pad = { l:72, r:26, t:18, b:54 };
+      const width = 920, height = svg.classList.contains("large-chart") ? 500 : 360, pad = { l:72, r:26, t:18, b:54 };
       const valueDigits = yLabel.includes("Etanol / Gasolina") ? 2 : (yLabel.includes("litro") ? 2 : 0);
       const all = series.flatMap(s => s.data.map(p => ({ x:dateMs(p.date), y:Number(p.value) })).filter(p => !Number.isNaN(p.y)));
       if (!all.length) { svg.innerHTML = "<text x='20' y='40' fill='#657173'>Sin datos</text>"; return; }
@@ -310,7 +358,7 @@
         ${paths}<line id="${svg.id}Cross" x1="-10" y1="${pad.t}" x2="-10" y2="${height-pad.b}" stroke="#7d8788" stroke-dasharray="3 3"/>
         <text x="${width/2-28}" y="${height-6}" font-size="12" fill="#445">${xLabel}</text>
         <text transform="translate(14 ${height/2+42}) rotate(-90)" font-size="12" fill="#445">${yLabel}</text>`;
-      if (svg.id === "parityChart") {
+      if (svg.id === "histParityChart") {
         const y70 = sy(0.70);
         if (y70 >= pad.t && y70 <= height-pad.b) {
           svg.insertAdjacentHTML("beforeend", `<line x1="${pad.l}" y1="${y70}" x2="${width-pad.r}" y2="${y70}" stroke="#9fa99a" stroke-dasharray="4 4"/><text x="${width-pad.r-35}" y="${y70-5}" font-size="11" fill="#657173">0,70</text>`);
@@ -341,7 +389,7 @@
       const lines = series.map(s => {
         const p = nearest(s.data, ms);
         if (!p) return "";
-        return `<div><span style="color:${s.color}">●</span> ${s.name}: <b>${num(p.value, target().includes("litro") ? 3 : 0)}</b> <small>${p.date}</small></div>`;
+        return `<div><span style="color:${s.color}">â—</span> ${s.name}: <b>${num(p.value, valueDigits)}</b> <small>${p.date}</small></div>`;
       }).join("");
       const tip = $("tooltip");
       tip.innerHTML = lines;
@@ -427,21 +475,25 @@
       const rows = DATA.correlations.filter(r => r.target===target()).map(r => ({...r, variable:r.variable.replace("anp_gasoline_mt_net_l","Gasolina neta").replace("brent_usd_bbl","Brent").replace("usd_brl","USD/BRL")}));
       barChart($("corrChart"), rows, "lag_weeks", "correlation", "variable", "Correlacion", "Rezago en semanas");
     }
-    function renderDrivers() {
-      const cut=cutoffDate(range());
-      const defs=[
-        ["brent_usd_bbl","Brent",colors.brent,$("brentChart"),"Brent (USD/bbl)"],
-        ["usd_brl","USD/BRL",colors.usd,$("usdChart"),"Tipo de cambio (BRL/USD)"],
-        ["anp_gasoline_mt_net_l","Gasolina neta MT",colors.gas,$("gasChart"),"Gasolina neta (R$/litro)"]
-      ];
-      defs.forEach(([col,name,color,svg,yLabel]) => {
-        const rows=DATA.dataset.filter(r => r[col]!==null && dateMs(r.date)>=cut);
-        lineChart(svg, [{name, color, data: rows.map(r => ({date:r.date, value:Number(r[col])}))}], yLabel, "Fecha");
-      });
-      const parityRows=DATA.dataset.filter(r => r.anp_parity_net!==null && dateMs(r.date)>=cut);
-      lineChart($("parityChart"), [
-        {name:"Paridad neta", color:colors.parity, data: parityRows.map(r => ({date:r.date, value:Number(r.anp_parity_net)}))},
-        {name:"Paridad bruta", color:colors.parityGross, dashed:true, data: parityRows.map(r => ({date:r.date, value:Number(r.anp_parity_gross)}))}
+    function renderHistory() {
+      const cut=cutoffDate(historyRange());
+      const rows=DATA.dataset.filter(r => dateMs(r.date)>=cut);
+      lineChart($("histEthanolChart"), [
+        {name:"CEPEA etanol neto", color:colors.actual, data: rows.filter(r => r.cepea_ethanol_mt_net_m3!==null).map(r => ({date:r.date, value:Number(r.cepea_ethanol_mt_net_m3)/1000}))},
+        {name:"ANP etanol neto", color:colors.base, dashed:true, data: rows.filter(r => r.anp_ethanol_mt_net_l!==null).map(r => ({date:r.date, value:Number(r.anp_ethanol_mt_net_l)}))}
+      ], "Precio neto (R$/litro)", "Fecha");
+      lineChart($("histGasChart"), [
+        {name:"Gasolina C neta MT", color:colors.gas, data: rows.filter(r => r.anp_gasoline_mt_net_l!==null).map(r => ({date:r.date, value:Number(r.anp_gasoline_mt_net_l)}))}
+      ], "Gasolina C neta (R$/litro)", "Fecha");
+      lineChart($("histBrentChart"), [
+        {name:"Brent", color:colors.brent, data: rows.filter(r => r.brent_usd_bbl!==null).map(r => ({date:r.date, value:Number(r.brent_usd_bbl)}))}
+      ], "Brent (USD/bbl)", "Fecha");
+      lineChart($("histUsdChart"), [
+        {name:"USD/BRL", color:colors.usd, data: rows.filter(r => r.usd_brl!==null).map(r => ({date:r.date, value:Number(r.usd_brl)}))}
+      ], "Tipo de cambio (BRL/USD)", "Fecha");
+      lineChart($("histParityChart"), [
+        {name:"Paridad neta", color:colors.parity, data: rows.filter(r => r.anp_parity_net!==null).map(r => ({date:r.date, value:Number(r.anp_parity_net)}))},
+        {name:"Paridad bruta", color:colors.parityGross, dashed:true, data: rows.filter(r => r.anp_parity_gross!==null).map(r => ({date:r.date, value:Number(r.anp_parity_gross)}))}
       ], "Etanol / Gasolina C", "Fecha");
     }
     function renderMonthlyTable() {
@@ -478,7 +530,7 @@
       return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
     }
     function renderAll() {
-      renderMain(); renderBacktest(); renderCorr(); renderDrivers();
+      renderMain(); renderBacktest(); renderCorr(); renderHistory();
       $("workspacePath").textContent = DATA.paths.workspace;
       $("outputsPath").textContent = DATA.paths.outputs;
       $("dashboardPath").textContent = DATA.paths.dashboard;
@@ -493,7 +545,14 @@
       $("usdBaseLabel").textContent = `base actual: ${num(base.usd, 4)}`;
       $("gasBaseLabel").textContent = `base actual: ${num(base.gas, 3)}`;
     }
-    ["targetSelect","rangeSelect","horizonSelect","brentInput","usdInput","gasInput"].forEach(id => $(id).addEventListener("input", renderAll));
+    document.querySelectorAll(".page-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".page-tab").forEach(x => x.classList.toggle("active", x === btn));
+        document.querySelectorAll(".page").forEach(page => page.classList.toggle("active", page.id === btn.dataset.page));
+        renderAll();
+      });
+    });
+    ["targetSelect","rangeSelect","horizonSelect","historyRangeSelect","brentInput","usdInput","gasInput"].forEach(id => $(id).addEventListener("input", renderAll));
     initInputs();
     renderAll();
   </script>
