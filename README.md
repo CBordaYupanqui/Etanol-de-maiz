@@ -10,10 +10,27 @@ Proyecto simple para proyectar 52 semanas de etanol hidratado en Mato Grosso y c
 
 ## Fuentes
 
-- CEPEA: indicador semanal de etanol hidratado MT.
-- ANP: precios de revenda de etanol hidratado y gasolina C en MT.
-- EIA: Brent semanal.
-- BCB/SGS: USD/BRL PTAX, serie 1.
+- CEPEA indicador semanal de etanol hidratado MT: https://cepea.org.br/br/indicador/etanol-semanal-mt.aspx
+- CEPEA serie historica de etanol hidratado MT: https://cepea.org.br/br/indicador/series/etanol-semanal-mt.aspx?id=76
+- ANP serie historica de precios de combustibles: https://www.gov.br/anp/pt-br/centrais-de-conteudo/dados-abertos/serie-historica-de-precos-de-combustiveis
+- EIA Europe Brent Spot Price FOB semanal: https://www.eia.gov/dnav/pet/hist/LeafHandler.ashx?f=w&n=pet&s=rbrte
+- BCB/SGS USD/BRL PTAX, serie 1: https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados?formato=json
+
+## Marcador de paridad ANP
+
+La paridad de surtidor se calcula con precios ANP de Mato Grosso:
+
+```text
+Paridad bruta = ANP etanol hidratado / ANP gasolina C
+Paridad neta = ANP etanol hidratado neto / ANP gasolina C neta
+```
+
+El pipeline guarda estas columnas en los historicos:
+
+- `anp_parity_gross`
+- `anp_parity_net`
+
+La referencia comercial de 0,70 se muestra como marcador visual en el dashboard. La paridad neta queda como referencia principal del proyecto porque el objetivo economico es analizar precios sin impuestos, fletes ni margenes.
 
 ## Como correr
 

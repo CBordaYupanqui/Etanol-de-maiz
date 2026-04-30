@@ -38,6 +38,13 @@ def payload() -> dict:
             "outputs": str(OUTPUTS.resolve()),
             "dashboard": str(DASHBOARD_HTML.resolve()),
         },
+        "sources": {
+            "CEPEA etanol hidratado MT": "https://cepea.org.br/br/indicador/etanol-semanal-mt.aspx",
+            "CEPEA serie historica MT": "https://cepea.org.br/br/indicador/series/etanol-semanal-mt.aspx?id=76",
+            "ANP revenda etanol hidratado + gasolina C": "https://www.gov.br/anp/pt-br/centrais-de-conteudo/dados-abertos/serie-historica-de-precos-de-combustiveis",
+            "EIA Brent semanal": "https://www.eia.gov/dnav/pet/hist/LeafHandler.ashx?f=w&n=pet&s=rbrte",
+            "BCB SGS USD/BRL PTAX serie 1": "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados?formato=json",
+        },
         "dataset": clean_records(read_csv("integrated_dataset.csv")),
         "forecasts": clean_records(read_csv("forecasts.csv")),
         "monthlyForecasts": clean_records(read_csv("monthly_forecasts.csv")),
@@ -116,6 +123,9 @@ HTML = r"""<!doctype html>
     .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; color: var(--muted); font-size: 12px; }
     .swatch { display:inline-block; width:10px; height:10px; margin-right:5px; vertical-align:-1px; }
     .path { font-family: Consolas, monospace; overflow-wrap: anywhere; }
+    .source-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+    .source-list li { margin: 5px 0; }
+    a { color: #246b76; }
     .tooltip {
       position: fixed;
       pointer-events: none;
@@ -233,11 +243,20 @@ HTML = r"""<!doctype html>
       <div class="panel span-4">
         <div class="chart-title">Gasolina neta MT historica</div>
         <svg id="gasChart"></svg>
-        <div class="hint">Los tres graficos estan vinculados por fecha al pasar el mouse.</div>
+        <div class="hint">Estos graficos estan vinculados por fecha al pasar el mouse.</div>
+      </div>
+      <div class="panel span-4">
+        <div class="chart-title">Paridad ANP etanol/gasolina C</div>
+        <svg id="parityChart"></svg>
+        <div class="hint">Marcador de surtidor: etanol hidratado ANP dividido gasolina C ANP. La linea punteada marca 0,70.</div>
       </div>
       <div class="panel span-5">
         <div class="chart-title">Validacion mensual del modelo completo</div>
         <div id="metricsTable"></div>
+      </div>
+      <div class="panel span-7">
+        <div class="chart-title">Fuentes de datos</div>
+        <ul class="source-list" id="sourcesList"></ul>
       </div>
       <div class="panel span-12">
         <div class="chart-title">Archivos</div>
@@ -260,7 +279,7 @@ HTML = r"""<!doctype html>
       cepea_ethanol_mt_net_m3: { label: "CEPEA neto", unit: "R$/m3 neto", digits: 0 },
       anp_ethanol_mt_net_l: { label: "ANP neto", unit: "R$/litro neto", digits: 3 }
     };
-    const colors = { actual:"#1f2a2e", base:"#28737d", whatif:"#6f4f9b", brent:"#bc7a20", usd:"#3f6d9a", gas:"#31795a" };
+    const colors = { actual:"#1f2a2e", base:"#28737d", whatif:"#6f4f9b", brent:"#bc7a20", usd:"#3f6d9a", gas:"#31795a", parity:"#8a5a99", parityGross:"#a7794f" };
     const modelName = "D_plus_usd_brl";
 
     function $(id) { return document.getElementById(id); }
@@ -321,6 +340,7 @@ HTML = r"""<!doctype html>
     }
     function lineChart(svg, series, yLabel, xLabel) {
       const width = 920, height = 360, pad = { l:72, r:26, t:18, b:54 };
+      const valueDigits = yLabel.includes("Etanol / Gasolina") ? 2 : (yLabel.includes("litro") ? 2 : 0);
       const all = series.flatMap(s => s.data.map(p => ({ x:dateMs(p.date), y:Number(p.value) })).filter(p => !Number.isNaN(p.y)));
       if (!all.length) { svg.innerHTML = "<text x='20' y='40' fill='#657173'>Sin datos</text>"; return; }
       const minX = Math.min(...all.map(p => p.x)), maxX = Math.max(...all.map(p => p.x));
@@ -331,7 +351,7 @@ HTML = r"""<!doctype html>
       const yTicks = Array.from({length:5}, (_,i) => minY + i*(maxY-minY)/4);
       const xTicks = Array.from({length:5}, (_,i) => minX + i*(maxX-minX)/4);
       let grid = "";
-      yTicks.forEach(v => { const y=sy(v); grid += `<line x1="${pad.l}" y1="${y}" x2="${width-pad.r}" y2="${y}" stroke="#e4e8df"/><text x="8" y="${y+4}" font-size="11" fill="#657173">${num(v, yLabel.includes("litro") ? 2 : 0)}</text>`; });
+      yTicks.forEach(v => { const y=sy(v); grid += `<line x1="${pad.l}" y1="${y}" x2="${width-pad.r}" y2="${y}" stroke="#e4e8df"/><text x="8" y="${y+4}" font-size="11" fill="#657173">${num(v, valueDigits)}</text>`; });
       xTicks.forEach(v => { const x=sx(v); const d=new Date(v).toISOString().slice(0,7); grid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${height-pad.b}" stroke="#f0f2ed"/><text x="${x-21}" y="${height-23}" font-size="11" fill="#657173">${d}</text>`; });
       const paths = series.map(s => {
         const pts = s.data.filter(p => p.value !== null && !Number.isNaN(Number(p.value))).map(p => `${sx(dateMs(p.date)).toFixed(1)},${sy(Number(p.value)).toFixed(1)}`).join(" ");
@@ -346,9 +366,15 @@ HTML = r"""<!doctype html>
         ${paths}<line id="${svg.id}Cross" x1="-10" y1="${pad.t}" x2="-10" y2="${height-pad.b}" stroke="#7d8788" stroke-dasharray="3 3"/>
         <text x="${width/2-28}" y="${height-6}" font-size="12" fill="#445">${xLabel}</text>
         <text transform="translate(14 ${height/2+42}) rotate(-90)" font-size="12" fill="#445">${yLabel}</text>`;
+      if (svg.id === "parityChart") {
+        const y70 = sy(0.70);
+        if (y70 >= pad.t && y70 <= height-pad.b) {
+          svg.insertAdjacentHTML("beforeend", `<line x1="${pad.l}" y1="${y70}" x2="${width-pad.r}" y2="${y70}" stroke="#9fa99a" stroke-dasharray="4 4"/><text x="${width-pad.r-35}" y="${y70-5}" font-size="11" fill="#657173">0,70</text>`);
+        }
+      }
       window.chartRegistry ||= {};
       window.chartRegistry[svg.id] = { minX, maxX, pad, width };
-      svg.onmousemove = ev => showTooltip(ev, svg, series, sx, minX, maxX, pad, width);
+      svg.onmousemove = ev => showTooltip(ev, svg, series, sx, minX, maxX, pad, width, valueDigits);
       svg.onmouseleave = () => {
         $("tooltip").style.display = "none";
         if (!window.chartRegistry) return;
@@ -362,7 +388,7 @@ HTML = r"""<!doctype html>
       if (!arr.length) return null;
       return arr.reduce((best, p) => Math.abs(dateMs(p.date)-ms) < Math.abs(dateMs(best.date)-ms) ? p : best, arr[0]);
     }
-    function showTooltip(ev, host, series, sx, minX, maxX, pad, width) {
+    function showTooltip(ev, host, series, sx, minX, maxX, pad, width, valueDigits) {
       const rect = host.getBoundingClientRect();
       const xPixel = (ev.clientX - rect.left) / rect.width * 920;
       if (xPixel < pad.l || xPixel > width-pad.r) return;
@@ -468,6 +494,11 @@ HTML = r"""<!doctype html>
         const rows=DATA.dataset.filter(r => r[col]!==null && dateMs(r.date)>=cut);
         lineChart(svg, [{name, color, data: rows.map(r => ({date:r.date, value:Number(r[col])}))}], yLabel, "Fecha");
       });
+      const parityRows=DATA.dataset.filter(r => r.anp_parity_net!==null && dateMs(r.date)>=cut);
+      lineChart($("parityChart"), [
+        {name:"Paridad neta", color:colors.parity, data: parityRows.map(r => ({date:r.date, value:Number(r.anp_parity_net)}))},
+        {name:"Paridad bruta", color:colors.parityGross, dashed:true, data: parityRows.map(r => ({date:r.date, value:Number(r.anp_parity_gross)}))}
+      ], "Etanol / Gasolina C", "Fecha");
     }
     function renderMonthlyTable() {
       const t=target();
@@ -507,6 +538,7 @@ HTML = r"""<!doctype html>
       $("workspacePath").textContent = DATA.paths.workspace;
       $("outputsPath").textContent = DATA.paths.outputs;
       $("dashboardPath").textContent = DATA.paths.dashboard;
+      $("sourcesList").innerHTML = Object.entries(DATA.sources || {}).map(([label, url]) => `<li><a href="${url}" target="_blank" rel="noreferrer">${label}</a></li>`).join("");
     }
     function initInputs() {
       const base = baselineInputs();

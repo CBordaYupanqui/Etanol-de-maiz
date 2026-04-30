@@ -32,6 +32,7 @@ BCB_USD_BRL_URL = (
 GROSS_PRICE_COLUMNS = ["cepea_ethanol_mt_m3", "anp_ethanol_mt_l", "anp_gasoline_mt_l"]
 TARGETS = ["cepea_ethanol_mt_net_m3", "anp_ethanol_mt_net_l"]
 EXOG_COLUMNS = ["anp_gasoline_mt_net_l", "brent_usd_bbl", "usd_brl"]
+PARITY_COLUMNS = ["anp_parity_gross", "anp_parity_net"]
 LAGS = [1, 2, 4, 8, 52]
 HORIZONS = [4, 12, 26, 52]
 DEFAULT_NET_ADJUSTMENTS = Path(__file__).resolve().parents[1] / "config" / "net_price_adjustments.csv"
@@ -371,6 +372,8 @@ def add_net_price_columns(data: pd.DataFrame, adjustments: pd.DataFrame) -> pd.D
 
     for col in ["cepea_ethanol_mt_net_m3", "anp_ethanol_mt_net_l", "anp_gasoline_mt_net_l"]:
         df[col] = df[col].clip(lower=0)
+    df["anp_parity_gross"] = df["anp_ethanol_mt_l"] / df["anp_gasoline_mt_l"].replace(0, np.nan)
+    df["anp_parity_net"] = df["anp_ethanol_mt_net_l"] / df["anp_gasoline_mt_net_l"].replace(0, np.nan)
     return df
 
 
@@ -435,6 +438,7 @@ def load_dataset(
             "cepea_ethanol_mt_net_m3",
             "anp_ethanol_mt_net_l",
             "anp_gasoline_mt_net_l",
+            *PARITY_COLUMNS,
             "brent_usd_bbl",
             "usd_brl",
             "icms_rate",
@@ -804,6 +808,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
             "anp_ethanol_mt_net_l",
             "anp_gasoline_mt_l",
             "anp_gasoline_mt_net_l",
+            *PARITY_COLUMNS,
             "brent_usd_bbl",
             "usd_brl",
             "icms_rate",
