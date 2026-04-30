@@ -100,6 +100,20 @@
     }
     .manual-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .manual-grid small { color: var(--muted); display: block; margin-top: 4px; }
+    .history-quad {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .quad-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+      background: #fbfcf9;
+    }
+    .quad-item .chart-title { font-size: 14px; }
+    svg.quad-chart { height: 330px; }
     .badge {
       display: inline-block;
       border-radius: 999px;
@@ -112,6 +126,8 @@
     @media (max-width: 980px) {
       .span-3, .span-4, .span-5, .span-7, .span-8, .span-9 { grid-column: span 12; }
       svg.large-chart { height: 420px; }
+      .history-quad { grid-template-columns: 1fr; }
+      svg.quad-chart { height: 360px; }
       header, main { padding-left: 15px; padding-right: 15px; }
     }
   </style>
@@ -193,9 +209,11 @@
         <svg id="backtestChart"></svg>
         <div class="hint">Comparacion fuera de muestra. Si aqui falla mucho, el forecast futuro debe leerse con mas cautela.</div>
       </div>
-      <div class="panel span-5">
+      <div class="panel span-12">
         <div class="chart-title">Correlaciones historicas por rezago</div>
-        <svg id="corrChart"></svg>
+        <div class="sub" id="corrPeriod">Periodo: n/a</div>
+        <svg id="corrChart" class="large-chart"></svg>
+        <div class="hint" id="corrLagLabel">Mueve el cursor sobre el grafico para leer la correlacion por rezago.</div>
       </div>
       <div class="panel span-5">
         <div class="chart-title">Validacion mensual del modelo completo</div>
@@ -242,21 +260,26 @@
           </div>
         </div>
         <div class="panel span-12">
-          <div class="chart-title">Gasolina C ANP neta MT</div>
-          <svg id="histGasChart" class="large-chart"></svg>
-        </div>
-        <div class="panel span-12">
-          <div class="chart-title">Brent historico</div>
-          <svg id="histBrentChart" class="large-chart"></svg>
-        </div>
-        <div class="panel span-12">
-          <div class="chart-title">USD/BRL historico</div>
-          <svg id="histUsdChart" class="large-chart"></svg>
-        </div>
-        <div class="panel span-12">
-          <div class="chart-title">Paridad ANP etanol/gasolina C</div>
-          <svg id="histParityChart" class="large-chart"></svg>
-          <div class="hint">Marcador de surtidor: etanol hidratado ANP dividido gasolina C ANP. La linea punteada marca 0,70.</div>
+          <div class="chart-title">Comparacion historica de drivers</div>
+          <div class="history-quad">
+            <div class="quad-item">
+              <div class="chart-title">Gasolina C ANP neta MT</div>
+              <svg id="histGasChart" class="quad-chart"></svg>
+            </div>
+            <div class="quad-item">
+              <div class="chart-title">Brent historico</div>
+              <svg id="histBrentChart" class="quad-chart"></svg>
+            </div>
+            <div class="quad-item">
+              <div class="chart-title">USD/BRL historico</div>
+              <svg id="histUsdChart" class="quad-chart"></svg>
+            </div>
+            <div class="quad-item">
+              <div class="chart-title">Paridad bruta ANP etanol/gasolina C</div>
+              <svg id="histParityChart" class="quad-chart"></svg>
+              <div class="hint">Paridad bruta de surtidor. La linea punteada marca 0,70.</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -331,7 +354,9 @@
         .map(r => ({ date:r.date, value:Number(r[t]) }));
     }
     function lineChart(svg, series, yLabel, xLabel) {
-      const width = 920, height = svg.classList.contains("large-chart") ? 500 : 360, pad = { l:72, r:26, t:18, b:54 };
+      const width = 920;
+      const height = svg.classList.contains("large-chart") ? 500 : (svg.classList.contains("quad-chart") ? 330 : 360);
+      const pad = { l:72, r:26, t:18, b:54 };
       const valueDigits = yLabel.includes("Etanol / Gasolina") ? 2 : (yLabel.includes("litro") ? 2 : 0);
       const all = series.flatMap(s => s.data.map(p => ({ x:dateMs(p.date), y:Number(p.value) })).filter(p => !Number.isNaN(p.y)));
       if (!all.length) { svg.innerHTML = "<text x='20' y='40' fill='#657173'>Sin datos</text>"; return; }
@@ -440,6 +465,73 @@
         <text x="${width/2-45}" y="${height-8}" font-size="12" fill="#445">${xLabel}</text>
         <text transform="translate(14 ${height/2+40}) rotate(-90)" font-size="12" fill="#445">${yLabel}</text>`;
     }
+    function corrColor(name) {
+      return name.includes("Gasolina") ? colors.gas : name.includes("Brent") ? colors.brent : colors.usd;
+    }
+    function correlationChart(svg, rows) {
+      const width=920, height=500, pad={l:76,r:34,t:28,b:62};
+      rows = rows.filter(r => r.correlation !== null && !Number.isNaN(Number(r.correlation)));
+      if (!rows.length) { svg.innerHTML = "<text x='20' y='40' fill='#657173'>Sin datos</text>"; return; }
+      const lags = [...new Set(rows.map(r => Number(r.lag_weeks)))].sort((a,b)=>a-b);
+      const variables = [...new Set(rows.map(r => r.variable))];
+      const minX = Math.min(...lags), maxX = Math.max(...lags);
+      const minY = -1, maxY = 1;
+      const sx = x => pad.l + (x-minX)/((maxX-minX)||1)*(width-pad.l-pad.r);
+      const sy = y => height-pad.b - (y-minY)/(maxY-minY)*(height-pad.t-pad.b);
+      let grid = "";
+      [-1,-0.5,0,0.5,1].forEach(v => {
+        const y=sy(v);
+        grid += `<line x1="${pad.l}" y1="${y}" x2="${width-pad.r}" y2="${y}" stroke="${v===0 ? '#9fa99a' : '#e4e8df'}"/>`;
+        grid += `<text x="18" y="${y+4}" font-size="11" fill="#657173">${num(v,2)}</text>`;
+      });
+      lags.forEach(lag => {
+        const x=sx(lag);
+        grid += `<line x1="${x}" y1="${pad.t}" x2="${x}" y2="${height-pad.b}" stroke="#f0f2ed"/>`;
+        grid += `<text x="${x-5}" y="${height-28}" font-size="11" fill="#657173">${lag}</text>`;
+      });
+      let marks = "";
+      variables.forEach(variable => {
+        const points = rows.filter(r => r.variable===variable).sort((a,b)=>Number(a.lag_weeks)-Number(b.lag_weeks));
+        const poly = points.map(r => `${sx(Number(r.lag_weeks)).toFixed(1)},${sy(Number(r.correlation)).toFixed(1)}`).join(" ");
+        marks += `<polyline points="${poly}" fill="none" stroke="${corrColor(variable)}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+        points.forEach(r => {
+          const x=sx(Number(r.lag_weeks)), y=sy(Number(r.correlation));
+          marks += `<circle cx="${x}" cy="${y}" r="4.3" fill="#fff" stroke="${corrColor(variable)}" stroke-width="2"/>`;
+          if ([0,4,8,12].includes(Number(r.lag_weeks))) {
+            marks += `<text x="${x+6}" y="${y-6}" font-size="10" fill="${corrColor(variable)}">${num(r.correlation,2)}</text>`;
+          }
+        });
+      });
+      const legend = variables.map((v,i) => `<text x="${pad.l + i*190}" y="18" font-size="12" fill="${corrColor(v)}">${v}</text>`).join("");
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      svg.innerHTML = `<rect width="${width}" height="${height}" fill="white"/>${legend}${grid}${marks}
+        <line id="corrChartCross" x1="-10" y1="${pad.t}" x2="-10" y2="${height-pad.b}" stroke="#7d8788" stroke-dasharray="3 3"/>
+        <text x="${width/2-70}" y="${height-8}" font-size="12" fill="#445">Rezago de la variable explicativa (semanas)</text>
+        <text transform="translate(14 ${height/2+48}) rotate(-90)" font-size="12" fill="#445">Correlacion</text>`;
+      svg.onmousemove = ev => {
+        const rect = svg.getBoundingClientRect();
+        const xPixel = (ev.clientX - rect.left) / rect.width * width;
+        if (xPixel < pad.l || xPixel > width-pad.r) return;
+        const rawLag = minX + (xPixel-pad.l)/(width-pad.l-pad.r)*(maxX-minX);
+        const lag = lags.reduce((best, v) => Math.abs(v-rawLag) < Math.abs(best-rawLag) ? v : best, lags[0]);
+        const x=sx(lag);
+        const cross = svg.querySelector("#corrChartCross");
+        if (cross) { cross.setAttribute("x1", x); cross.setAttribute("x2", x); }
+        const selected = variables.map(v => rows.find(r => r.variable===v && Number(r.lag_weeks)===lag)).filter(Boolean);
+        $("corrLagLabel").innerHTML = `Rezago seleccionado: <b>${lag} semanas</b>. ` + selected.map(r => `${r.variable}: <b>${num(r.correlation,2)}</b>`).join(" | ");
+        const tip = $("tooltip");
+        tip.innerHTML = selected.map(r => `<div><span style="color:${corrColor(r.variable)}">o</span> ${r.variable}: <b>${num(r.correlation,2)}</b></div>`).join("");
+        tip.style.left = `${ev.clientX + 14}px`;
+        tip.style.top = `${ev.clientY + 14}px`;
+        tip.style.display = "block";
+      };
+      svg.onmouseleave = () => {
+        $("tooltip").style.display = "none";
+        $("corrLagLabel").textContent = "Mueve el cursor sobre el grafico para leer la correlacion por rezago.";
+        const cross = svg.querySelector("#corrChartCross");
+        if (cross) { cross.setAttribute("x1","-10"); cross.setAttribute("x2","-10"); }
+      };
+    }
     function renderMain() {
       const t = target();
       const hist = selectedHistory(t);
@@ -473,7 +565,11 @@
     }
     function renderCorr() {
       const rows = DATA.correlations.filter(r => r.target===target()).map(r => ({...r, variable:r.variable.replace("anp_gasoline_mt_net_l","Gasolina neta").replace("brent_usd_bbl","Brent").replace("usd_brl","USD/BRL")}));
-      barChart($("corrChart"), rows, "lag_weeks", "correlation", "variable", "Correlacion", "Rezago en semanas");
+      const hist = DATA.dataset.filter(r => r[target()] !== null);
+      const start = hist.length ? hist[0].date : "n/a";
+      const end = hist.length ? hist[hist.length-1].date : "n/a";
+      $("corrPeriod").textContent = `Periodo usado: ${start} a ${end} (${hist.length} observaciones semanales)`;
+      correlationChart($("corrChart"), rows);
     }
     function renderHistory() {
       const cut=cutoffDate(historyRange());
@@ -492,8 +588,7 @@
         {name:"USD/BRL", color:colors.usd, data: rows.filter(r => r.usd_brl!==null).map(r => ({date:r.date, value:Number(r.usd_brl)}))}
       ], "Tipo de cambio (BRL/USD)", "Fecha");
       lineChart($("histParityChart"), [
-        {name:"Paridad neta", color:colors.parity, data: rows.filter(r => r.anp_parity_net!==null).map(r => ({date:r.date, value:Number(r.anp_parity_net)}))},
-        {name:"Paridad bruta", color:colors.parityGross, dashed:true, data: rows.filter(r => r.anp_parity_gross!==null).map(r => ({date:r.date, value:Number(r.anp_parity_gross)}))}
+        {name:"Paridad bruta", color:colors.parityGross, data: rows.filter(r => r.anp_parity_gross!==null).map(r => ({date:r.date, value:Number(r.anp_parity_gross)}))}
       ], "Etanol / Gasolina C", "Fecha");
     }
     function renderMonthlyTable() {
