@@ -4,6 +4,8 @@ __pycache__/
 
 # Raw download cache. Rebuild with src/ethanol_mt_model.py.
 data/cache/
+data/ci-cache/
+outputs_test/
 
 # Local/editor noise
 .DS_Store

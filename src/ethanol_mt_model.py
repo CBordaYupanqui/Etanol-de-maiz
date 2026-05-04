@@ -5,6 +5,7 @@ import io
 import json
 import math
 import re
+import time
 import unicodedata
 import urllib.parse
 import urllib.request
@@ -39,7 +40,7 @@ HORIZONS = [4, 12, 26, 52]
 DEFAULT_NET_ADJUSTMENTS = Path(__file__).resolve().parents[1] / "config" / "net_price_adjustments.csv"
 
 
-def _download(url: str, cache_path: Path | None = None) -> bytes:
+def _download(url: str, cache_path: Path | None = None, retries: int = 3, timeout: int = 120) -> bytes:
     if cache_path is not None and cache_path.exists():
         return cache_path.read_bytes()
     req = urllib.request.Request(
@@ -50,8 +51,21 @@ def _download(url: str, cache_path: Path | None = None) -> bytes:
             "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7",
         },
     )
-    with urllib.request.urlopen(req, timeout=60) as response:
-        data = response.read()
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                data = response.read()
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt == retries:
+                raise
+            wait_seconds = min(5 * attempt, 15)
+            print(f"Download failed for {url} ({exc}). Retrying in {wait_seconds}s...")
+            time.sleep(wait_seconds)
+    else:
+        raise RuntimeError(f"Download failed for {url}: {last_error}")
     if cache_path is not None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_bytes(data)
@@ -226,14 +240,17 @@ def _iter_anp_tables(cache_dir: Path, start_year: int) -> Iterable[pd.DataFrame]
         path_parts = [part for part in urllib.parse.urlparse(link).path.split("/") if part]
         name_source = "_".join(path_parts[-3:]) if path_parts else f"anp_{idx}"
         name = _slug(name_source)[:120]
-        raw = _download(link, cache_dir / "anp_v2" / name)
-        if link.lower().endswith(".zip"):
-            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-                for member in zf.namelist():
-                    if member.lower().endswith(".csv"):
-                        yield _read_anp_csv_bytes(zf.read(member))
-        elif link.lower().endswith(".csv"):
-            yield _read_anp_csv_bytes(raw)
+        try:
+            raw = _download(link, cache_dir / "anp_v2" / name)
+            if link.lower().endswith(".zip"):
+                with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                    for member in zf.namelist():
+                        if member.lower().endswith(".csv"):
+                            yield _read_anp_csv_bytes(zf.read(member))
+            elif link.lower().endswith(".csv"):
+                yield _read_anp_csv_bytes(raw)
+        except Exception as exc:
+            print(f"ANP file skipped after download/read failure: {link} ({exc})")
 
 
 def read_anp_mt(cache_dir: Path, start_year: int) -> pd.DataFrame:
