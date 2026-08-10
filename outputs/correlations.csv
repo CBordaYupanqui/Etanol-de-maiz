@@ -1,7 +1,7 @@
 target,variable,lag_weeks,correlation
-anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,0,0.6625912761173154
-anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,1,0.6463423019298189
-anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,2,0.6275962002617945
+anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,0,0.6625912761173158
+anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,1,0.6463423019298188
+anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,2,0.627596200261795
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,3,0.6056140807618255
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,4,0.5814954714700779
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,5,0.5548320606610814
@@ -12,9 +12,9 @@ anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,9,0.44595268174227115
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,10,0.4156698286009217
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,11,0.39170133830009113
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,12,0.37654507154207506
-anp_ethanol_mt_net_l,brent_usd_bbl,0,0.16164822750469812
-anp_ethanol_mt_net_l,brent_usd_bbl,1,0.14921415336025115
-anp_ethanol_mt_net_l,brent_usd_bbl,2,0.12945635629274357
+anp_ethanol_mt_net_l,brent_usd_bbl,0,0.16164822750469815
+anp_ethanol_mt_net_l,brent_usd_bbl,1,0.14921415336025107
+anp_ethanol_mt_net_l,brent_usd_bbl,2,0.12945635629274363
 anp_ethanol_mt_net_l,brent_usd_bbl,3,0.1043749245194071
 anp_ethanol_mt_net_l,brent_usd_bbl,4,0.0675825776165339
 anp_ethanol_mt_net_l,brent_usd_bbl,5,0.01869071646378368
@@ -25,9 +25,9 @@ anp_ethanol_mt_net_l,brent_usd_bbl,9,-0.15411308743997398
 anp_ethanol_mt_net_l,brent_usd_bbl,10,-0.19235787372912205
 anp_ethanol_mt_net_l,brent_usd_bbl,11,-0.2242127102181968
 anp_ethanol_mt_net_l,brent_usd_bbl,12,-0.2528632691810559
-anp_ethanol_mt_net_l,usd_brl,0,0.2743318909424772
-anp_ethanol_mt_net_l,usd_brl,1,0.28911536461963755
-anp_ethanol_mt_net_l,usd_brl,2,0.30339393905565076
+anp_ethanol_mt_net_l,usd_brl,0,0.27433189094247723
+anp_ethanol_mt_net_l,usd_brl,1,0.28911536461963777
+anp_ethanol_mt_net_l,usd_brl,2,0.3033939390556512
 anp_ethanol_mt_net_l,usd_brl,3,0.31361970873332445
 anp_ethanol_mt_net_l,usd_brl,4,0.3257343463574386
 anp_ethanol_mt_net_l,usd_brl,5,0.3371933882925083
