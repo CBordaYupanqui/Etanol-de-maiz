@@ -1,5 +1,5 @@
 target,variable,lag_weeks,correlation
-anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,0,0.6644600982988379
+anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,0,0.6644600982988378
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,1,0.6489374558440515
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,2,0.6320252872982123
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,3,0.6100341425341997
@@ -13,7 +13,7 @@ anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,10,0.4222368986868248
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,11,0.3995998122156828
 anp_ethanol_mt_net_l,anp_gasoline_mt_net_l,12,0.38657047270923806
 anp_ethanol_mt_net_l,brent_usd_bbl,0,0.16316339829765691
-anp_ethanol_mt_net_l,brent_usd_bbl,1,0.15139139030417406
+anp_ethanol_mt_net_l,brent_usd_bbl,1,0.15139139030417384
 anp_ethanol_mt_net_l,brent_usd_bbl,2,0.1330950623187707
 anp_ethanol_mt_net_l,brent_usd_bbl,3,0.10798566762884655
 anp_ethanol_mt_net_l,brent_usd_bbl,4,0.07123217967240814
@@ -26,7 +26,7 @@ anp_ethanol_mt_net_l,brent_usd_bbl,10,-0.18827137923845402
 anp_ethanol_mt_net_l,brent_usd_bbl,11,-0.21981374379174154
 anp_ethanol_mt_net_l,brent_usd_bbl,12,-0.24818325947796693
 anp_ethanol_mt_net_l,usd_brl,0,0.27463844053000314
-anp_ethanol_mt_net_l,usd_brl,1,0.28964607550261867
+anp_ethanol_mt_net_l,usd_brl,1,0.2896460755026187
 anp_ethanol_mt_net_l,usd_brl,2,0.30455930810261195
 anp_ethanol_mt_net_l,usd_brl,3,0.3148444971639587
 anp_ethanol_mt_net_l,usd_brl,4,0.327069482114824
